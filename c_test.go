@@ -1,20 +1,21 @@
 package main
 
-/*
 import (
 	"testing"
+	"time"
+
 	"github.com/Prem-099/lru-cache/lru"
 )
-/*
-func BenchmarkTest( b *testing.B){
+
+func BenchmarkTestGet( b *testing.B){
 	cache := lru.New[string,int](1000)
-	cache.Put("a",1)
+	cache.Put("a",1,3*time.Second)
 	b.ResetTimer()
 	for i:=0;i<b.N;i++{
 		cache.Get("a")
 	}
 }
-
+/*
 func BenchmarkTest( b *testing.B){
 	cache := lru.NewSharded[string,int](1000,16)
 	cache.Put("a",1)
@@ -60,7 +61,7 @@ func BenchmarkHeavyWriteShard(b *testing.B) {
 }
 /*
 func BenchmarkParallelGetShard(b *testing.B) {
-	cache := lru.NewSharded[string,int](1000,256)
+	cache := lru.NewSharded[string,int](1000,32)
 	cache.Put("key",1)
 	b.RunParallel(func(p *testing.PB) {
 		for p.Next(){

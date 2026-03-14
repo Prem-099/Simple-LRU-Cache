@@ -2,20 +2,31 @@ package main
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/Prem-099/lru-cache/lru"
 )
 
 
 
 func main() {
-	cache := lru.NewSharded[string,int](100,16)
-	cache.Put("a", 1)
-	cache.Put("b", 2)
+	cache := lru.New[string,int](100)
+	cache.Put("a", 1,2*time.Second)
+	cache.Put("b", 2,2*time.Second)
 	val, ok := cache.Get("a")
 	fmt.Println("Value of key a : ",val,ok)
-	cache.Put("c",3)
+	cache.Put("c",3,2*time.Second)
+	time.Sleep(2*time.Second)
 	_,ok = cache.Get("b")
-	fmt.Println("b exists ",ok)
-	val,ok = cache.Get("c")
-	fmt.Println("C value exists ",val, ok)
+	if ok{
+		fmt.Println("b exists ",ok)
+	}else{
+		fmt.Println("Key expired")
+	}
+	_,ok = cache.Get("a")
+	if ok{
+		fmt.Println("b exists ",ok)
+	}else{
+		fmt.Println("Key expired")
+	}
 }
