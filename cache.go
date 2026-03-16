@@ -8,13 +8,14 @@ import (
 
 type Cache[K comparable, V any] struct {
 	mux         sync.Mutex
-	_           [56]byte
 	items       map[K]*Node[K, V]
 	list        *List[K, V]
-	capacity    int
-	pool        sync.Pool
+	_           [56]byte
 	moveCounter uint64
+	pool        sync.Pool
+	capacity    int
 	metrics     Metrics
+	stopJanitor chan struct{}
 }
 
 func New[K comparable, V any](capacity int) *Cache[K, V] {
@@ -106,9 +107,9 @@ func (c *Cache[K, V]) Put(key K, Value V, ttl time.Duration) {
 
 func (c *Cache[K, V]) Delete(key K) bool {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	node, ok := c.items[key]
 	if !ok {
+		c.mux.Unlock()
 		return false
 	}
 	c.list.RemoveNode(node)
@@ -116,6 +117,7 @@ func (c *Cache[K, V]) Delete(key K) bool {
 	node.next = nil
 	node.prev = nil
 	c.pool.Put(node)
+	c.mux.Unlock()
 	return true
 }
 
@@ -127,7 +129,7 @@ func (c *Cache[K, V]) Len() int {
 
 func (c *Cache[K, V]) Clear() {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	c.items = make(map[K]*Node[K, V])
 	c.list = &List[K, V]{}
+	c.mux.Unlock()
 }

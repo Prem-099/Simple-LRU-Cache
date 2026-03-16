@@ -33,16 +33,16 @@ func (l *List[K, V]) RemoveNode(node *Node[K, V]) {
 }
 
 func (l *List[K, V]) MoveToFront(node *Node[K, V]) {
-	if node == l.head{
+	if node == l.head {
 		return
 	}
 	l.RemoveNode(node)
 	l.AddToFront(node)
 }
 
-func (l *List[K, V]) RemoveTail() *Node[K, V]  {
+func (l *List[K, V]) RemoveTail() *Node[K, V] {
 	if l.tail == nil {
-		return nil 
+		return nil
 	}
 	lru := l.tail
 	l.RemoveNode(lru)
