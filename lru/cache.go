@@ -7,10 +7,11 @@ import (
 )
 
 type Cache[K comparable, V any] struct {
-	capacity    int
+	mux         sync.Mutex
+	_           [56]byte
 	items       map[K]*Node[K, V]
 	list        *List[K, V]
-	mux         sync.Mutex
+	capacity    int
 	pool        sync.Pool
 	moveCounter uint64
 	metrics     Metrics
@@ -50,36 +51,36 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 		var zero V
 		return zero, false
 	}
-	if node.exp > 0 && atomic.LoadInt64(&now) > node.exp {
-		c.metrics.Expirations.Add(1)
+	if node.exp > 0 && now > node.exp {
 		c.list.RemoveNode(node)
 		delete(c.items, key)
+		node.prev = nil
+		node.next = nil
+		c.pool.Put(node)
 		c.mux.Unlock()
+		c.metrics.Expirations.Add(1)
 		var zero V
 		return zero, false
 	}
 	c.moveCounter++
-	if c.moveCounter&7 == 0 {
-		c.list.MoveToFront(node)
-	}
+	val := node.value
 	c.mux.Unlock()
 	c.metrics.Hits.Add(1)
-	return node.value, true
+	return val, true
 }
 
 func (c *Cache[K, V]) Put(key K, Value V, ttl time.Duration) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
 	c.metrics.Puts.Add(1)
 	exp := int64(0)
-	if ttl <= 0 {
-		ttl = 5 * time.Second
+	c.mux.Lock()
+	if ttl > 0 {
+		exp = now + int64(ttl)
 	}
-	exp = atomic.LoadInt64(&now) + int64(ttl)
 	if node, ok := c.items[key]; ok {
 		node.value = Value
 		node.exp = exp
 		c.list.MoveToFront(node)
+		c.mux.Unlock()
 		return
 	}
 	newnode := c.pool.Get().(*Node[K, V])
@@ -92,10 +93,41 @@ func (c *Cache[K, V]) Put(key K, Value V, ttl time.Duration) {
 		lru := c.list.RemoveTail()
 		if lru != nil {
 			delete(c.items, lru.key)
-			c.metrics.Evictions.Add(1)
 			lru.prev = nil
 			lru.next = nil
 			c.pool.Put(lru)
+			c.mux.Unlock()
+			c.metrics.Evictions.Add(1)
+			return
 		}
 	}
+	c.mux.Unlock()
+}
+
+func (c *Cache[K, V]) Delete(key K) bool {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	node, ok := c.items[key]
+	if !ok {
+		return false
+	}
+	c.list.RemoveNode(node)
+	delete(c.items, node.key)
+	node.next = nil
+	node.prev = nil
+	c.pool.Put(node)
+	return true
+}
+
+func (c *Cache[K, V]) Len() int {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	return len(c.items)
+}
+
+func (c *Cache[K, V]) Clear() {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	c.items = make(map[K]*Node[K, V])
+	c.list = &List[K, V]{}
 }

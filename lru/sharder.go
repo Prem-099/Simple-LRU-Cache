@@ -13,8 +13,13 @@ func NewSharded[K comparable, V any](capacity int, shardCount int) *ShardedCache
 	}
 	shards := make([]*Cache[K, V], shardCount)
 	perShard := capacity / shardCount // capacity of each shard
+	remainder := capacity % shardCount
 	for i := 0; i < shardCount; i++ {
-		shards[i] = New[K, V](perShard)
+		cap := perShard
+		if i<remainder{
+			cap++
+		}
+		shards[i] = New[K, V](cap)
 	}
 	return &ShardedCache[K, V]{
 		shards: shards,
@@ -23,8 +28,7 @@ func NewSharded[K comparable, V any](capacity int, shardCount int) *ShardedCache
 }
 
 func (s *ShardedCache[K, V]) getShard(key K) *Cache[K, V] {
-	index := hashKey(key) & s.mask
-	return s.shards[index]
+	return s.shards[hashKey(key) & s.mask]
 }
 
 func hashKey[K comparable](key K) uint64 {
