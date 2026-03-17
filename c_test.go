@@ -23,20 +23,16 @@ func BenchmarkTestGet(b *testing.B) {
 	}
 }
 
-func BenchmarkTestGetShard(b *testing.B) {
-	cache := NewSharded[int, int](1000, 64)
-	cache.Put(1, 1, 2*time.Second)
-	b.Cleanup(func() {
-		stats := cache.Stats()
-		b.Logf("Cache stats : Hits:%d Misses:%d Exp:%d Evic:%d Puts:%d HitRate:%f", stats.Hits, stats.Misses,
-			stats.Expirations, stats.Evictions, stats.Puts, stats.HitRate())
-	})
+func BenchmarkMapGet(b *testing.B) {
+	m := make(map[int]int, 1000)
+	for i := 0; i < 1000; i++ {
+		m[i] = i
+	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Get(1)
+		sinkInt = m[i%1000]
 	}
 }
-
 func BenchmarkTestParallelGet(b *testing.B) {
 	cache := New[string, int](1000)
 	cache.Put("a", 1, 2*time.Second)
@@ -51,7 +47,6 @@ func BenchmarkTestParallelGet(b *testing.B) {
 		}
 	})
 }
-
 
 func BenchmarkParallelGetShard(b *testing.B) {
 	cache := NewSharded[int, int](1000, 64)
@@ -142,75 +137,6 @@ func BenchmarkHeavyWriteShard(b *testing.B) {
 	})
 }
 
-func BenchmarkTestTtl(b *testing.B) {
-	cache := New[int, int](1000)
-	cache.Put(1, 1, 3*time.Second)
-	time.Sleep(2 * time.Second)
-	b.Cleanup(func() {
-		stats := cache.Stats()
-		b.Logf("Cache stats : Hits:%d Misses:%d Exp:%d Evic:%d Puts:%d hitrate:%f", stats.Hits, stats.Misses,
-			stats.Expirations, stats.Evictions, stats.Puts, stats.HitRate())
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cache.Get(1)
-	}
-}
-
-func BenchmarkCachedMixed(b *testing.B) {
-	cache := New[int, int](1000)
-	for i := 0; i < 1000; i++ {
-		cache.Put(i, i, 5*time.Second)
-	}
-	b.Cleanup(func() {
-		stats := cache.Stats()
-		b.Logf("Cache stats : Hits:%d Misses:%d Exp:%d Evic:%d Puts:%d HitRate:%f", stats.Hits, stats.Misses,
-			stats.Expirations, stats.Evictions, stats.Puts, stats.HitRate())
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := i % 1500
-		if i%3 == 0 {
-			cache.Put(key, key, 5*time.Second)
-		} else {
-			sinkInt, sinkOk = cache.Get(key)
-		}
-	}
-}
-
-func BenchmarkZipfCache(b *testing.B) {
-	cache := NewSharded[int, int](1000, 64)
-	b.Cleanup(func() {
-		stats := cache.Stats()
-		b.Logf("Cache stats : Hits:%d Misses:%d Exp:%d Evic:%d Puts:%d HitRate:%f", stats.Hits, stats.Misses,
-			stats.Expirations, stats.Evictions, stats.Puts, stats.HitRate())
-	})
-	b.RunParallel(func(p *testing.PB) {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		zipf := rand.NewZipf(r, 1.2, 1, 1500)
-		for p.Next() {
-			key := int(zipf.Uint64())
-			if key%4 == 0 {
-				cache.Put(key, key, 2*time.Second)
-			} else {
-				cache.Get(key)
-			}
-		}
-	})
-}
-
-// built in
-func BenchmarkMapGet(b *testing.B) {
-	m := make(map[int]int, 1000)
-	for i := 0; i < 1000; i++ {
-		m[i] = i
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sinkInt = m[i%1000]
-	}
-}
-
 func BenchmarkLruEviction(b *testing.B) {
 	cache := New[int, int](1000)
 	b.Cleanup(func() {
@@ -235,6 +161,27 @@ func BenchmarkLruParallelEviction(b *testing.B) {
 		for p.Next() {
 			cache.Put(i, i, 2*time.Second)
 			i++
+		}
+	})
+}
+
+func BenchmarkZipfCache(b *testing.B) {
+	cache := NewSharded[int, int](1000, 64)
+	b.Cleanup(func() {
+		stats := cache.Stats()
+		b.Logf("Cache stats : Hits:%d Misses:%d Exp:%d Evic:%d Puts:%d HitRate:%f", stats.Hits, stats.Misses,
+			stats.Expirations, stats.Evictions, stats.Puts, stats.HitRate())
+	})
+	b.RunParallel(func(p *testing.PB) {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		zipf := rand.NewZipf(r, 1.2, 1, 1500)
+		for p.Next() {
+			key := int(zipf.Uint64())
+			if key%4 == 0 {
+				cache.Put(key, key, 2*time.Second)
+			} else {
+				cache.Get(key)
+			}
 		}
 	})
 }
@@ -283,4 +230,21 @@ func BenchmarkZipfParallelGet(b *testing.B) {
 			i++
 		}
 	})
+}
+
+func BenchmarkCache_HitMiss(b *testing.B) {
+	cache := New[int,int](500)
+	for i:=0;i<500;i++{
+		cache.Put(i,i,0)
+	}
+	b.Cleanup(func() {
+		stats := cache.Stats()
+		b.Logf("Cache stats : Hits:%d Misses:%d Exp:%d Evic:%d Puts:%d HitRate:%f", stats.Hits, stats.Misses,
+			stats.Expirations, stats.Evictions, stats.Puts, stats.HitRate())
+	})
+	b.ResetTimer()
+	for i:=0;i<b.N;i++{
+		key := i%1000
+		cache.Get(key)
+	}
 }
