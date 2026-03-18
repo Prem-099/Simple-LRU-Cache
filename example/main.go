@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	cache := lru.New[string, int](1000)
+	cache := lru.New[string, int](0)
 	cache.Put("a", 1, 1*time.Second)
 	cache.Put("b", 2, 1*time.Second)
 	fmt.Println(cache.Len())
